@@ -1,0 +1,25 @@
+{
+  "name": "external-tiny-crm",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "./node_modules/.bin/rimraf dist && webpack && cpx appsscript.json dist && cpx src/View/* dist && cpx onopen.js dist",
+    "deploy": "npm run build && ./node_modules/.bin/clasp push"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@google/clasp": "^2.4.1",
+    "@types/google-apps-script": "^1.0.45",
+    "@types/node": "^17.0.21",
+    "cpx": "^1.5.0",
+    "gas-webpack-plugin": "^2.1.0",
+    "rimraf": "^3.0.2",
+    "ts-loader": "^9.2.7",
+    "typescript": "^4.6.2",
+    "webpack": "^5.70.0",
+    "webpack-cli": "^4.9.2"
+  }
+}

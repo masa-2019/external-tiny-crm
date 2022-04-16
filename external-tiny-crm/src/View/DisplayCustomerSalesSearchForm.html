@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <title><?= pageTitle ?></title>
+  <style>
+    .loading {
+      display: none; /* 通常時は非表示 */
+      z-index: 1;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      color: gray;
+    }
+    #table-area {
+      font-size: 12px;
+      display: none;
+    }
+
+  </style>
+  <script src="https://d3js.org/d3.v5.min.js"></script>
+
+  <!-- Bootstrap CSS -->
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css" integrity="sha384-9aIt2nRpC12Uk9gS9baDl411NQApFmC26EwAOH8WgZl5MYYxFfc+NcPb1dKGj7Sk" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+<div class="container">
+  <div class="row">
+    <div class="col-12">
+      <div class="input-daterange input-group" id="datepicker">
+        <div class="input-group-prepend">
+          <span class="input-group-text">開始日付</span>
+        </div>
+        <input type="text" class="input-sm form-control" name="from" value="<?= oneWeekAgo ?>" autocomplete="off"/>
+        <div class="input-group-append">
+          <span class="input-group-text">終了日付</span>
+        </div>
+        <input type="text" class="input-sm form-control" name="to" value="<?= today ?>" autocomplete="off"/>
+      </div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-6">
+      <input type="button" value="検索" class="btn btn-primary" id="doSearch"/>
+    </div>
+  </div>
+</div>
+<div class="loading">
+  <i class="fas fa-spinner fa-5x fa-spin"></i>
+</div>
+<div class="container">
+  <div class="row">
+    <div class="col-6" id="pi-chart-area">
+    </div>
+    <div class="col-6" id="bar-chart-area">
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-12" id="table-area">
+      <table class="table table-striped">
+        <thead class="thead-light">
+        <tr>
+          <th>
+            締め日
+          </th>
+          <th>
+            総売上
+          </th>
+          <th>
+            会員販売
+          </th>
+          <th>
+            非会員販売
+          </th>
+          <th>
+            会員販売率
+          </th>
+          <th>
+            利用ポイント
+          </th>
+          <th>
+            付与ポイント
+          </th>
+        </tr>
+        </thead>
+        <tbody id="table-area-body">
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+
+<!-- jQuery, popper.js, Bootstrap JS -->
+<script
+        src="https://code.jquery.com/jquery-3.6.0.min.js"
+        integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4="
+        crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js" integrity="sha384-9/reFTGAW83EW2RDu2S0VKaIzap3H66lZH81PoYlFhbGU+6BZp6G7niu735Sk7lN" crossorigin="anonymous"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js" integrity="sha384-B4gt1jrGC7Jh4AgTPSdUtOBvfO8shuf57BaghqFfPlYxofvL8/KUEfYiJOMMV+rV" crossorigin="anonymous"></script>
+
+<!-- bootstrap-datepicker -->
+<link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-datepicker/1.9.0/css/bootstrap-datepicker.min.css">
+<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-datepicker/1.9.0/js/bootstrap-datepicker.min.js"></script>
+<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-datepicker/1.9.0/locales/bootstrap-datepicker.ja.min.js"></script>
+
+<!-- bootstrap-datepickerの設定 -->
+<script>
+
+  function showLineChart(showData) {
+    if (showData.length < 1) {
+      alert("折れ線グラフのデータの取得に失敗しました。");
+      return;
+    }
+    // 1. データの準備
+    let customerSalesDataSet = [];
+    let nonCustomerSalesDataSet = [];
+    for (let i = 0; i < showData.length; i++) {
+      customerSalesDataSet.push([showData[i].sumDate, showData[i].customerSales]);
+      nonCustomerSalesDataSet.push([showData[i].sumDate, showData[i].nonCustomerSales]);
+    }
+//      ["2021-01-05", 60],
+
+
+    var width = 390; // グラフの幅
+    var height = 300; // グラフの高さ
+    var margin = { "top": 30, "bottom": 60, "right": 90, "left": 60 };
+
+    // 2. SVG領域の設定
+    var svg = d3.select("#bar-chart-area").append("svg").attr("width", width).attr("height", height).attr("id", "line-chart");
+    let timeparser = d3.timeParse("%Y-%m-%d");
+    let format = d3.timeFormat("%m/%d");
+
+    customerSalesDataSet = customerSalesDataSet.map(function(data){
+      // 日付のデータをパース
+      return  [timeparser(data[0]), data[1]];
+    });
+
+    nonCustomerSalesDataSet = nonCustomerSalesDataSet.map(function(data){
+      // 日付のデータをパース
+      return  [timeparser(data[0]), data[1]];
+    });
+
+    // X軸を時間のスケールに設定する
+    var xScale = d3.scaleTime()
+            // 最小値と最大値を指定しX軸の領域を設定する
+            .domain([
+              // データ内の日付の最小値を取得
+              d3.min(customerSalesDataSet, function(d){return d[0];}),
+              // データ内の日付の最大値を取得
+              d3.max(customerSalesDataSet, function(d){return d[0];})
+            ])
+            // SVG内でのX軸の位置の開始位置と終了位置を指定しX軸の幅を設定する
+            .range([margin.left, width - margin.right]);
+    var yScale = d3.scaleLinear()
+            .domain([0, d3.max(customerSalesDataSet, function(d) { return d[1]; })])
+            .range([height - margin.bottom, margin.top]);
+
+    // 4. 軸の表示
+    var axisx = d3.axisBottom(xScale).ticks(customerSalesDataSet.length).tickFormat(format);
+    var axisy = d3.axisLeft(yScale).ticks(5);
+
+    svg.append("g")
+            .attr("transform", "translate(" + 0 + "," + (height - margin.bottom) + ")")
+            .call(axisx)
+            .append("text")
+            .attr("fill", "black")
+            .attr("x", (width - margin.left - margin.right) / 2 + margin.left)
+            .attr("y", 35)
+            .attr("text-anchor", "middle")
+            .attr("font-size", "10pt")
+            .attr("font-weight", "bold")
+            .text("締め日");
+
+    svg.append("g")
+            .attr("transform", "translate(" + margin.left + "," + 0 + ")")
+            .call(axisy)
+            .append("text")
+            .attr("fill", "black")
+            .attr("text-anchor", "middle")
+            .attr("x", -(height - margin.top - margin.bottom) / 2 - margin.top)
+            .attr("y", -50)
+            .attr("transform", "rotate(-90)")
+            .attr("font-weight", "bold")
+            .attr("font-size", "10pt")
+            .text("金額（円）");
+
+    // 5. ラインの表示
+    svg.append("path")
+            .datum(customerSalesDataSet)
+            .attr("fill", "none")
+            .attr("stroke", "#DC3912")
+            .attr("stroke-width", 1.5)
+            .attr("d", d3.line()
+                    .x(function(d) { return xScale(d[0]); })
+                    .y(function(d) { return yScale(d[1]); }));
+
+    // 5. ラインの表示
+    svg.append("path")
+            .datum(nonCustomerSalesDataSet)
+            .attr("fill", "none")
+            .attr("stroke", "#3366CC")
+            .attr("stroke-width", 1.5)
+            .attr("d", d3.line()
+                    .x(function(d) { return xScale(d[0]); })
+                    .y(function(d) { return yScale(d[1]); }));
+  }
+
+  function showPiChart(dataset) {
+
+    const width = 300; // グラフの幅
+    const height = 300; // グラフの高さ
+    const radius = Math.min(width, height) / 2 - 10;
+    // 2. SVG領域の設定
+    const svg = d3.select("#pi-chart-area").append("svg").attr("width", width).attr("height", height).attr("id", "pi-chart");
+
+    let g = svg.append("g").attr("transform", "translate(" + width / 2 + "," + height / 2 + ")");
+
+    // 3. カラーの設定
+    const color = d3.scaleOrdinal()
+            .range(["#DC3912", "#3366CC"]);
+
+    // 4. pieチャートデータセット用関数の設定
+    const pie = d3.pie()
+            .value(function (d) {
+              return d.value;
+            })
+            .sort(null);
+
+    // 5. pieチャートSVG要素の設定
+    const pieGroup = g.selectAll(".pie")
+            .data(pie(dataset))
+            .enter()
+            .append("g")
+            .attr("class", "pie");
+
+    arc = d3.arc()
+            .outerRadius(radius)
+            .innerRadius(0);
+
+    pieGroup.append("path")
+            .attr("d", arc)
+            .attr("fill", function(d) { return color(d.index) })
+            .attr("opacity", 0.75)
+            .attr("stroke", "white");
+
+    // 6. pieチャートテキストSVG要素の設定
+    const text = d3.arc()
+            .outerRadius(radius - 30)
+            .innerRadius(radius - 30);
+
+    pieGroup.append("text")
+            .attr("fill", "black")
+            .attr("transform", function(d) { return "translate(" + text.centroid(d) + ")"; })
+            .attr("dy", "5px")
+            .attr("font", "10px")
+            .attr("text-anchor", "middle")
+            .text(function(d) { return d.data.piChartLabel; });
+  }
+
+  $('.input-daterange').datepicker({
+    language:'ja', // 日本語化
+    format: 'yyyy/mm/dd', // 日付表示をyyyy/mm/ddにフォーマット
+  })
+  .on({
+    changeDate: function() {
+      // datepickerの日付を取得
+      console.log('開始日付 :', $('input[name="from"]').val() );  // 開始日付を取得
+      console.log('終了日付 :', $('input[name="to"]').val() );    // 終了日付を取得
+    }
+  });
+
+  function showTable(dataList) {
+    let $tableAreaBody = $('#table-area-body');
+    $tableAreaBody.empty();
+    for (let i = 0; i < dataList.length; i++) {
+      let wkTr = $('<tr></tr>');
+      let wkTd = $('<td></td>');
+      wkTd.text(dataList[i].sumDate.replace(/-/g, ""));
+      wkTr.append(wkTd)
+
+      wkTd = $('<td></td>');
+      wkTd.text(dataList[i].customerSales + dataList[i].nonCustomerSales);
+      wkTr.append(wkTd)
+
+      wkTd = $('<td></td>');
+      wkTd.text(dataList[i].customerSales);
+      wkTr.append(wkTd)
+
+      wkTd = $('<td></td>');
+      wkTd.text(dataList[i].nonCustomerSales);
+      wkTr.append(wkTd)
+
+      wkTd = $('<td></td>');
+      wkTd.text(Math.floor(dataList[i].customerSales / (dataList[i].customerSales + dataList[i].nonCustomerSales) * 100) + "%");
+      wkTr.append(wkTd)
+
+      wkTd = $('<td></td>');
+      wkTd.text(dataList[i].usePoint);
+      wkTr.append(wkTd)
+
+      wkTd = $('<td></td>');
+      wkTd.text(dataList[i].newPoint);
+      wkTr.append(wkTd)
+
+      $tableAreaBody.append(wkTr);
+    }
+  }
+
+  $('#doSearch').click(function () {
+    $('.loading').css('display', 'block');
+    $('#table-area').css('display', 'none');
+    d3.select("#pi-chart").remove();
+    d3.select("#line-chart").remove();
+    const from = $('input[name="from"]').val();
+    const to = $('input[name="to"]').val();
+    google.script.run
+      .withSuccessHandler(function(data) {
+        $('.loading').css('display', 'none');
+        if (typeof data === "string") {
+          alert(data);
+          return;
+        }
+        $('#table-area').css('display', 'block');
+        showPiChart(data.piChartList);
+        showLineChart(data.dailySalesList);
+        showTable(data.dailySalesList);
+      })
+      .withFailureHandler(function(data){
+        $('.loading').css('display', 'none');
+        console.log(data);
+        alert("検索に失敗しました。")
+      })
+      .displayCustomerSalesPiChart({"from": from, "to": to});
+  });
+
+</script>
+
+</body>
+</html>
